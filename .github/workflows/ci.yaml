@@ -35,31 +35,37 @@ jobs:
 
 
   arm:
-    name: Nix - Linux aarch64 static
+    name: Cabal - Linux aarch64 GHC 9.4.8
     runs-on:
       - self-hosted
       - Linux
       - ARM64
     steps:
       - uses: actions/checkout@v4
-
-      - name: Build static executable
-        run: nix-build -A postgrestStatic
-      - name: Save built executable as artifact
-        uses: actions/upload-artifact@v4
+      - name: ghcup
+        run: |
+          ghcup install ghc 9.4.8
+          ghcup set ghc 9.4.8
+      - name: Copy cabal.project & fix caching
+        run: |
+          mkdir ~/.cabal
+          cp cabal.project.non-nix cabal.project
+      - name: Cache
+        uses: actions/cache@v4
         with:
-          name: postgrest-linux-static-aarch64
-          path: result/bin/postgrest
-          if-no-files-found: error
-
-      - name: Build Docker image
-        run: nix-build -A docker.image --out-link postgrest-docker-arm64.tar.gz
-      - name: Save built Docker image as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: postgrest-docker-aarch64
-          path: postgrest-docker-arm64.tar.gz
-          if-no-files-found: error
+          path: |
+            ~/.cabal/packages
+            ~/.cabal/store
+            dist-newstyle
+          key: cache-cabal-arm-9.4.8-${{ hashFiles('postgrest.cabal', 'cabal.project', 'cabal.project.freeze') }}
+          restore-keys: |
+            cache-cabal-arm-9.4.8-
+      - name: Install dependencies
+        run: |
+          cabal update
+          cabal build --only-dependencies --enable-tests --enable-benchmarks
+      - name: Build
+        run: cabal build --enable-tests --enable-benchmarks all
 
 
   prepare:
